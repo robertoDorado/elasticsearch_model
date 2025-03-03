@@ -1,0 +1,27 @@
+{
+    "name": "elasticsearch/model",
+    "description": "Esta é uma abstração das principais funcionalidades da biblioteca elasticsearch",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Elasticsearch\\Model\\": "src/"
+        },
+        "files": [
+            "src/Boot/Helpers.php"
+        ]
+    },
+    "authors": [
+        {
+            "name": "Roberto Dorado"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "elasticsearch/elasticsearch": "v8.17.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    }
+}
