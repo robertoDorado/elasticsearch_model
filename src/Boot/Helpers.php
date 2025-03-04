@@ -22,12 +22,6 @@ if (!function_exists('multiMatchTypeData')) {
     }
 }
 
-if (!function_exists('isNumericFormat')) {
-    function isNumericFormat(string $value) {
-        return !preg_match('/\D/', $value) ? true : false;
-    }
-}
-
 if (!function_exists('propertiesType')) {
     function propertiesType() {
         return [

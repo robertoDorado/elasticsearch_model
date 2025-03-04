@@ -16,7 +16,7 @@ use ReflectionClass;
  * @author Roberto Dorado <robertodorado7@gmail.com>
  * @package Elasticsearch\Model\Base
  */
-class ElasticModel implements ElasticInterface
+abstract class ElasticModel implements ElasticInterface
 {
     private string $index = "";
 
@@ -468,10 +468,6 @@ class ElasticModel implements ElasticInterface
 
     public function deleteDocument($id): bool
     {
-        if (!isNumericFormat($id)) {
-            throw new Exception(sprintf('Formato inválido do id: %s', $id));
-        }
-
         $params = [
             'index' => $this->index,
             'id'    => $id,
@@ -493,17 +489,14 @@ class ElasticModel implements ElasticInterface
 
     public function getDocument($id): array
     {
-        if (!isNumericFormat($id)) {
-            throw new Exception(sprintf('Formato inválido do id: %s', $id));
-        }
-
         $params = [
             'index' => $this->index,
-            'id'    => $id,
+            'id' => $id,
         ];
 
         try {
-            return Connection::instance()->get($params)['hits']['hits'] ?? [];
+            $response = Connection::instance()->get($params)->asArray();
+            return $response;
         } catch (ElasticsearchException $th) {
             throw new ElasticModelException(json_encode(
                 [
@@ -517,10 +510,6 @@ class ElasticModel implements ElasticInterface
 
     public function updateDocument($id, array $data): ElasticModel
     {
-        if (!isNumericFormat($id)) {
-            throw new Exception(sprintf('Formato inválido do id: %s', $id));
-        }
-
         $params = [
             'index' => $this->index,
             'id'    => $id,
@@ -545,10 +534,6 @@ class ElasticModel implements ElasticInterface
 
     public function indexDocument($id, array $data): ElasticModel
     {
-        if (!isNumericFormat($id)) {
-            throw new Exception(sprintf('Formato inválido do id: %s', $id));
-        }
-
         $params = [
             'index' => $this->index,
             'id'    => $id,

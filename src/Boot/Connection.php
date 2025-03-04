@@ -14,7 +14,7 @@ class Connection
     private static $client = null;
 
     public static function instance() {
-        if (self::$client === null) {
+        if (empty(self::$client)) {
             self::$client = ClientBuilder::create()
                 ->setHosts([HOST])
                 ->build();
