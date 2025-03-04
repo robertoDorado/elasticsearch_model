@@ -9,14 +9,6 @@ Este repositório contém uma implementação de um modelo para interagir com o 
 - Elasticsearch rodando (localmente ou em um servidor)
 - Biblioteca `elasticsearch/elasticsearch`
 
-## 📦 Instalação
-
-Instale a biblioteca necessária via Composer:
-
-```bash
-composer require elasticsearch/elasticsearch
-```
-
 ## 🔧 Configuração
 
 Antes de utilizar a model, configure a conexão com o Elasticsearch através de uma constante:
