@@ -18,7 +18,7 @@ use ReflectionClass;
  */
 abstract class ElasticModel implements ElasticInterface
 {
-    private string $index = "";
+    public string $index = "";
 
     private array $properties = [];
 
@@ -31,14 +31,28 @@ abstract class ElasticModel implements ElasticInterface
             throw new InvalidArgumentException("namespace inválido");
         }
 
-        $this->index = strtolower(basename(str_replace("\\", "/", $namespace)));
+        $transformCamelCaseToSnakeCase = function (string $value) {
+            return preg_replace_callback(
+                "/([\da-z])([\dA-Z])?([\dA-Z])/",
+                function ($matches) {
+                    return $matches[1] . (!empty($matches[2]) ? "_{$matches[2]}" : "") . "_{$matches[3]}";
+                },
+                $value
+            );
+        };
+        
         $reflectionClass = new ReflectionClass($namespace);
+        $namespace = basename(str_replace("\\", "/", $namespace));
+        $namespace = $transformCamelCaseToSnakeCase($namespace);
+        
+        $namespace = strtolower($namespace);
+        $this->index = $namespace;
 
         $this->properties = $reflectionClass->getProperties();
-        $this->properties = array_reduce($this->properties, function ($acc, $property) {
+        $this->properties = array_reduce($this->properties, function ($acc, $property) use ($transformCamelCaseToSnakeCase) {
             $property->setAccessible(true);
-            $propName = preg_replace("/([a-z])([A-Z])/", "$1_$2", $property->getName());
-            $acc[$propName]['type'] = $property->getValue();
+            $propName = $transformCamelCaseToSnakeCase($property->getName());
+            $acc[$propName]['type'] = @strtolower($property->getValue());
             return $acc;
         }, []);
     }
@@ -317,6 +331,31 @@ abstract class ElasticModel implements ElasticInterface
         }
     }
 
+    public function searchByTerms(array $fields): array
+    {
+        $params = [
+            'index' => $this->index,
+            'body'  => [
+                'query' => [
+                    'terms' => $fields
+                ]
+            ]
+        ];
+
+        try {
+            $response = Connection::instance()->search($params);
+            return $response['hits']['hits'] ?? [];
+        } catch (ElasticsearchException $th) {
+            throw new ElasticModelException(json_encode(
+                [
+                    "error_search_terms" => "Erro na captura pelos termos",
+                    "status_code" => $th->getCode(),
+                    "message" => $th->getMessage()
+                ]
+            ), $th->getCode());
+        }
+    }
+
     public function searchByTerm(array $fields): array
     {
         $params = [
@@ -536,8 +575,8 @@ abstract class ElasticModel implements ElasticInterface
     {
         $params = [
             'index' => $this->index,
-            'id'    => $id,
-            'body'  => $data,
+            'id' => $id,
+            'body' => $data,
         ];
 
         try {
