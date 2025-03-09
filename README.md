@@ -22,11 +22,28 @@ define("HOST", 'localhost:9200');
 A model implementa métodos padrão para interagir com um índice do Elasticsearch. Exemplo da model genérica:
 
 ```php
+
+namespace Elasticsearch\Model\Base;
+
+use Elastic\Elasticsearch\Exception\ElasticsearchException;
+use Elasticsearch\Model\Boot\Connection;
+use Elasticsearch\Model\Base\ElasticModelException;
+use Elasticsearch\Model\Interfaces\ElasticInterface;
+use Exception;
+use InvalidArgumentException;
+use ReflectionClass;
+
+/**
+ * ElasticModel Base
+ * @link 
+ * @author Roberto Dorado <robertodorado7@gmail.com>
+ * @package Elasticsearch\Model\Base
+ */
 abstract class ElasticModel implements ElasticInterface
 {
-    private string $index = "";
+    public string $index = "";
 
-    private array $properties = [];
+    public array $properties = [];
 
     /**
      * ElasticModel constructor
@@ -37,15 +54,63 @@ abstract class ElasticModel implements ElasticInterface
             throw new InvalidArgumentException("namespace inválido");
         }
 
-        $this->index = strtolower(basename(str_replace("\\", "/", $namespace)));
+        $transformCamelCaseToSnakeCase = function (string $value) {
+            return preg_replace_callback(
+                "/([\da-z])([\dA-Z])?([\dA-Z])/",
+                function ($matches) {
+                    return $matches[1] . (!empty($matches[2]) ? "_{$matches[2]}" : "") . "_{$matches[3]}";
+                },
+                $value
+            );
+        };
+
         $reflectionClass = new ReflectionClass($namespace);
+        $namespace = basename(str_replace("\\", "/", $namespace));
+        $namespace = $transformCamelCaseToSnakeCase($namespace);
+
+        $namespace = strtolower($namespace);
+        $this->index = $namespace;
 
         $this->properties = $reflectionClass->getProperties();
-        $this->properties = array_reduce($this->properties, function ($acc, $property) {
+        $this->properties = array_values(array_filter($this->properties, function ($item) {
+            $item->setAccessible(true);
+            return $item->isStatic();
+        }));
+
+        $this->properties = array_reduce($this->properties, function ($acc, $property) use ($transformCamelCaseToSnakeCase) {
             $property->setAccessible(true);
-            $propName = preg_replace("/([a-z])([A-Z])/", "$1_$2", $property->getName());
-            $acc[$propName]['type'] = $property->getValue();
-            return $acc;
+            $typeName = $property->getType()->getName();
+
+            $matchType = [
+                "string" => function ($property) use ($transformCamelCaseToSnakeCase, $acc) {
+                    $propName = strtolower($transformCamelCaseToSnakeCase($property->getName()));
+                    $acc[$propName]['type'] = strtolower($property->getValue());
+                    return $acc;
+                },
+
+                "array" => function ($property) use ($transformCamelCaseToSnakeCase, $acc) {
+                    $referenceData = array_keys($property->getValue());
+                    $propName = strtolower($transformCamelCaseToSnakeCase($property->getName()));
+                    sort($referenceData);
+                    
+                    if (['properties', 'type'] !== $referenceData) {
+                        throw new InvalidArgumentException('Erro ao definir as propriedades obrigatórias no mapping array');
+                    }
+
+                    $dataKeys = array_map(function ($keyName) use ($transformCamelCaseToSnakeCase) {
+                        return strtolower($transformCamelCaseToSnakeCase($keyName));
+                    }, array_keys($property->getValue()['properties']));
+                    
+                    $dataValues = array_values($property->getValue()['properties']);
+                    $properties = array_combine($dataKeys, $dataValues);
+
+                    $acc[$propName]["type"] = $property->getValue()['type'];
+                    $acc[$propName]["properties"] = $properties;
+                    return $acc;
+                }
+            ];
+
+            return $matchType[$typeName]($property) ?? [];
         }, []);
     }
 
@@ -53,53 +118,6 @@ abstract class ElasticModel implements ElasticInterface
     {
         $indexName = empty($indexName) ? $this->index : $indexName;
         return Connection::instance()->indices()->exists(['index' => $indexName])->asBool();
-    }
-
-    public function deleteIndex(string $indexName = ""): bool
-    {
-        try {
-            $indexName = empty($indexName) ? $this->index : $indexName;
-            Connection::instance()->indices()->delete(['index' => $indexName]);
-            return true;
-        } catch (ElasticsearchException $th) {
-            throw new ElasticModelException(json_encode(
-                [
-                    "error_delete_index" => "Erro ao deletar o índice",
-                    "status_code" => $th->getCode(),
-                    "message" => $th->getMessage()
-                ]
-            ), $th->getCode());
-        }
-    }
-
-    public function searchByNestedField(string $subDocument, array $subdocumentMatch): array
-    {
-        $params = [
-            'index' => $this->index,
-            'body' => [
-                'query' => [
-                    'nested' => [
-                        'path' => $subDocument,
-                        'query' => [
-                            'match' => $subdocumentMatch
-                        ]
-                    ]
-                ]
-            ]
-        ];
-
-        try {
-            $response = Connection::instance()->search($params);
-            return $response['hits']['hits'] ?? [];
-        } catch (ElasticsearchException $th) {
-            throw new ElasticModelException(json_encode(
-                [
-                    "error_search_nested_field" => "Erro na captura por campo aninhado",
-                    "status_code" => $th->getCode(),
-                    "message" => $th->getMessage()
-                ]
-            ), $th->getCode());
-        }
     }
 }
 ```
