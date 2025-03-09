@@ -20,7 +20,7 @@ abstract class ElasticModel implements ElasticInterface
 {
     public string $index = "";
 
-    private array $properties = [];
+    public array $properties = [];
 
     /**
      * ElasticModel constructor
@@ -40,20 +40,54 @@ abstract class ElasticModel implements ElasticInterface
                 $value
             );
         };
-        
+
         $reflectionClass = new ReflectionClass($namespace);
         $namespace = basename(str_replace("\\", "/", $namespace));
         $namespace = $transformCamelCaseToSnakeCase($namespace);
-        
+
         $namespace = strtolower($namespace);
         $this->index = $namespace;
 
         $this->properties = $reflectionClass->getProperties();
+        $this->properties = array_values(array_filter($this->properties, function ($item) {
+            $item->setAccessible(true);
+            return $item->isStatic();
+        }));
+
         $this->properties = array_reduce($this->properties, function ($acc, $property) use ($transformCamelCaseToSnakeCase) {
             $property->setAccessible(true);
-            $propName = $transformCamelCaseToSnakeCase($property->getName());
-            $acc[$propName]['type'] = @strtolower($property->getValue());
-            return $acc;
+            $typeName = $property->getType()->getName();
+
+            $matchType = [
+                "string" => function ($property) use ($transformCamelCaseToSnakeCase, $acc) {
+                    $propName = strtolower($transformCamelCaseToSnakeCase($property->getName()));
+                    $acc[$propName]['type'] = strtolower($property->getValue());
+                    return $acc;
+                },
+
+                "array" => function ($property) use ($transformCamelCaseToSnakeCase, $acc) {
+                    $referenceData = array_keys($property->getValue());
+                    $propName = strtolower($transformCamelCaseToSnakeCase($property->getName()));
+                    sort($referenceData);
+                    
+                    if (['properties', 'type'] !== $referenceData) {
+                        throw new InvalidArgumentException('Erro ao definir as propriedades obrigatórias no mapping array');
+                    }
+
+                    $dataKeys = array_map(function ($keyName) use ($transformCamelCaseToSnakeCase) {
+                        return strtolower($transformCamelCaseToSnakeCase($keyName));
+                    }, array_keys($property->getValue()['properties']));
+                    
+                    $dataValues = array_values($property->getValue()['properties']);
+                    $properties = array_combine($dataKeys, $dataValues);
+
+                    $acc[$propName]["type"] = $property->getValue()['type'];
+                    $acc[$propName]["properties"] = $properties;
+                    return $acc;
+                }
+            ];
+
+            return $matchType[$typeName]($property) ?? [];
         }, []);
     }
 

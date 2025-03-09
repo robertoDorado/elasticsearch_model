@@ -138,6 +138,54 @@ class Shakespear extends ElasticModel
 }
 ```
 
+### Criar um modelo com um campo nested
+```php
+namespace Elasticsearch\Model\Example;
+
+use Elasticsearch\Model\Base\ElasticModel;
+
+/**
+ * Products Example
+ * @link 
+ * @author Roberto Dorado <robertodorado7@gmail.com>
+ * @package Elasticsearch\Model\Example
+ */
+class Orders extends ElasticModel
+{
+    protected static string $id = 'keyword';
+
+    protected static string $client = 'text';
+
+    protected static string $date = 'date';
+
+    protected static array $products = [
+        'type' => 'nested',
+        'properties' => [
+            'id' => [
+                'type' => 'keyword'
+            ],
+            'name' => [
+                'type' => 'text'
+            ],
+            'quantity' => [
+                'type' => 'integer'
+            ],
+            'price' => [
+                'type' => 'float'
+            ]
+        ]
+    ];
+
+    /**
+     * Orders constructor
+     */
+    public function __construct()
+    {
+        parent::__construct(Orders::class);
+    }
+}
+```
+
 ### Criar um Documento
 ```php
 $shakespear = new Shakespear();
@@ -165,6 +213,30 @@ $shakespear->updateDocument('1', ['preco' => 120]);
 ### Deletar um Documento
 ```php
 $shakespear->deleteDocument('1');
+```
+
+## Inserir documento em um ídice que possui um campo do tipo nested
+```php
+$orders = new Orders();
+$orders->indexDocument(uniqid(), [
+    "id" => uniqid(),
+    "client" => "João",
+    "date" => (new DateTime())->format('c'),
+    "products" => [
+        [
+            "id" => uniqid(),
+            "name" => "Celular",
+            "quantity" => 2,
+            "price" => 1256.77
+        ],
+        [
+            "id" => uniqid(),
+            "name" => "Máquina de lavar",
+            "quantity" => 1,
+            "price" => 785.66
+        ],
+    ]
+]);
 ```
 
 ## 🚀 Conclusão
